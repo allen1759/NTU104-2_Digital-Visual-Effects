@@ -1,5 +1,5 @@
-Ia = imread('hall1.jpg');
-Ib = imread('hall2.jpg');
+Ia = imread('1.jpg');
+Ib = imread('2.jpg');
 Ia = single(rgb2gray(Ia)) ;
 Ib = single(rgb2gray(Ib)) ;
 [fa, da] = vl_sift(Ia) ;
@@ -7,7 +7,7 @@ Ib = single(rgb2gray(Ib)) ;
 [matches, scores] = vl_ubcmatch(da, db) ;
 
 
-imgs = [imread('hall1.jpg');imread('hall2.jpg')];
+imgs = [imread('1.jpg');imread('2.jpg')];
 height = size(imgs, 1)/2;
 imshow(imgs);
 hold on;

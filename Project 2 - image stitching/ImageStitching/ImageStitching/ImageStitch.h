@@ -16,30 +16,25 @@
 class ImageStitch
 {
 public:
-    ImageStitch(int n, const std::string & p) : imageNum(n), path(p)
-    {
-        features.resize(imageNum);
-        images.resize(imageNum);
-    }
-    cv::Mat CylindricalProjection(const cv::Mat & image);
-    void CalculateFeatures();
-    std::pair<double, double> RANSAC(int ind1, int ind2, double thres, int k = 50, int n = 3);
-    
+
+	ImageStitch(const std::string & p);
+	void StartStitching();
+	cv::Mat CylindricalProjection(int ind);
+	void CalculateFeatures();
+	std::pair<double, double> RANSAC(int ind1, int ind2, double thres, int k = 50, int n = 1);
+	cv::Mat MergeImage(cv::Mat * img1, cv::Mat * img2, std::pair<int, int> shift);
+
 private:
 public:
-    static const int MAX_IMAGE_SIZE = 10;
-    int imageNum;
-    std::string path;
-    
-    cv::Mat test1;
-    cv::Mat test2;
-    double focalLen = 740;
-    
-    std::vector<double> focalLens;
-    std::vector< cv::Mat > images;
-    
-    std::vector< std::vector< std::pair<double, double> > > features;
-    std::vector< std::pair<int, int> > matches[MAX_IMAGE_SIZE][MAX_IMAGE_SIZE];
+	static const int MAX_IMAGE_SIZE = 15;
+	std::string path;
+	std::string parameter = "parameter.txt";
+
+	std::vector<double> focalLens;
+	std::vector< cv::Mat > images;
+
+	std::vector< std::vector< std::pair<double, double> > > features;
+	std::vector< std::pair<int, int> > matches[MAX_IMAGE_SIZE][MAX_IMAGE_SIZE];
 };
 
 

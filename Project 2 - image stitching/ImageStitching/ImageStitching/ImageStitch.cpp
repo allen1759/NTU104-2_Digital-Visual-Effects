@@ -55,7 +55,7 @@ void ImageStitch::StartStitching()
         shifts[i].second += shifts[i-1].second;
     }
     
-    cv::imwrite(path + "pono.jpg", merge);
+    cv::imwrite(path + "mypano.jpg", merge);
 }
 
 cv::Mat ImageStitch::CylindricalProjection(int ind)
@@ -63,7 +63,7 @@ cv::Mat ImageStitch::CylindricalProjection(int ind)
 	const cv::Mat & image = images[ind];
 	cv::Mat proj = cv::Mat(image.rows, image.cols, CV_8UC3);
 	proj = cv::Scalar::all(0);
-	double scale = focalLens[ind];
+//	double scale = focalLens[ind];
     
     for (int i = 0; i < image.rows; i += 1) {
         for (int j = 0; j < image.cols; j += 1) {
@@ -105,13 +105,16 @@ void ImageStitch::CalculateFeatures()
 {
     std::fstream fa, fb, ma;
     
-    std::string tmpName = "";
-//    std::string tmpName = "denny";
-    
     for(int im = 0; im+1 < images.size(); im += 1) {
-        fa.open(path + tmpName + std::to_string(im) + "fa.txt");
-        fb.open(path + tmpName + std::to_string(im) + "fb.txt");
-        ma.open(path + tmpName + std::to_string(im) + "ma.txt");
+        fa.open(path + std::to_string(im) + "fa.txt");
+        if( !fa.is_open() )
+            std::cout << path + std::to_string(im) + "fa.txt not open" << std::endl;
+        fb.open(path + std::to_string(im) + "fb.txt");
+        if( !fb.is_open() )
+            std::cout << path + std::to_string(im) + "fb.txt not open" << std::endl;
+        ma.open(path + std::to_string(im) + "ma.txt");
+        if( !ma.is_open() )
+            std::cout << path + std::to_string(im) + "ma.txt not open" << std::endl;
         
     	double x, y, a, b, i1, i2;
     	while (fa >> x >> y >> a >> b) {
@@ -167,6 +170,71 @@ void ImageStitch::CalculateFeatures()
 	cv::imshow("2 image feature matching", merge);
 	cv::waitKey();
 	cv::destroyWindow("2 image feature matching");
+}
+
+void ImageStitch::CalculateFeatures_Around()
+{
+    std::fstream fa, fb, ma;
+    
+    for(int im = 0; im+1 < images.size(); im += 1) {
+        fa.open(path + std::to_string(im) + "fa.txt");
+        fb.open(path + std::to_string(im) + "fb.txt");
+        ma.open(path + std::to_string(im) + "ma.txt");
+        
+    	double x, y, a, b, i1, i2;
+    	while (fa >> x >> y >> a >> b) {
+    		features[im].push_back(std::make_pair(x, y));
+    	}
+    	while (fb >> x >> y >> a >> b) {
+    		features[im+1].push_back(std::make_pair(x, y));
+    	}
+    	while (ma >> i1 >> i2) {
+    		matches[im][(im+1) % images.size()].push_back(std::make_pair(i1, i2));
+    		matches[(im+1) % images.size()][im].push_back(std::make_pair(i2, i1));
+    	}
+        
+        fa.close();
+        fb.close();
+        ma.close();
+    }
+
+
+	// feature Cylindrical warping
+
+	for (int i = 0; i < images.size(); i += 1) {
+		for (int j = 0; j < features[i].size(); j += 1) {
+			double xp = features[i][j].first - images[i].cols / 2;
+			double yp = features[i][j].second - images[i].rows / 2;
+
+			double theta = atan2(xp, focalLens[i]);
+			double h = yp / sqrt(xp*xp + focalLens[i]*focalLens[i]);
+			double x = focalLens[i] * theta + images[i].cols / 2;
+			double y = focalLens[i] * h + images[i].rows / 2;
+
+			features[i][j] = std::make_pair(x, y);
+		}
+	}
+
+
+	// test feature matching
+	cv::Mat & test1 = images[0];
+	cv::Mat & test2 = images[1];
+	cv::Mat merge(test1.rows, test1.cols * 2, test1.type());
+	cv::Mat mask1(merge, cv::Range(0, test1.rows), cv::Range(0, test1.cols));
+	cv::Mat mask2(merge, cv::Range(0, test2.rows), cv::Range(test1.cols, test1.cols + test2.cols));
+	test1.copyTo(mask1);
+	test2.copyTo(mask2);
+	for (int i = 0; i < matches[0][1].size() / 1; i += 1) {
+		const auto & ind = matches[0][1][i];
+		cv::line(merge,
+				 cv::Point(features[0][ind.first - 1].first, features[0][ind.first - 1].second),
+				 cv::Point(features[1][ind.second - 1].first + test1.cols, features[1][ind.second - 1].second),
+				 cv::Scalar(255, 0, 0));
+	}
+
+	cv::imshow("2 image feature matching - around", merge);
+	cv::waitKey();
+	cv::destroyWindow("2 image feature matching - around");
 }
 
 

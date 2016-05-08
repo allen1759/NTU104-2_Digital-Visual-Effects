@@ -3,7 +3,7 @@
 //  ImageStitching
 //
 //  Created by Zhi-Wei Yang on 4/22/16.
-//  Copyright © 2016 Zhi-Wei Yang. All rights reserved.
+//  C opyright © 2016 Zhi-Wei Yang. All rights reserved.
 //
 
 #ifndef ImageStitch_h
@@ -22,11 +22,11 @@ public:
 	cv::Mat CylindricalProjection(int ind);
 	void CalculateFeatures();
 	std::pair<double, double> RANSAC(int ind1, int ind2, double thres, int k = 50, int n = 1);
-	cv::Mat MergeImage(cv::Mat * img1, cv::Mat * img2, std::pair<int, int> shift);
+	cv::Mat MergeImage(cv::Mat * img1, cv::Mat * img2, std::pair<int, int> & shift);
 
 private:
 public:
-	static const int MAX_IMAGE_SIZE = 15;
+	static const int MAX_IMAGE_SIZE = 20;
 	std::string path;
 	std::string parameter = "parameter.txt";
 

@@ -12,6 +12,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <string>
+#include <queue>
 #include <opencv2/imgproc/imgproc.hpp>
 
 ImageStitch::ImageStitch(const std::string & p) : path(p)
@@ -36,8 +37,25 @@ void ImageStitch::StartStitching()
 	}
 	CalculateFeatures();
 
-	auto shift = RANSAC(0, 1, 1e5, 200, 1);
-	cv::Mat merge = MergeImage(&images[0], &images[1], shift);
+    std::vector< std::pair<int, int> > shifts;
+    for (int i = 0; i+1 < images.size(); i += 1) {
+        shifts.push_back( RANSAC(i, i+1, 50.0, 500, 1) );
+    }
+    
+//    for (int i=1; i < images.size(); i += 1) {
+//        MergeImage(&images[i-1], &images[i], shifts[i-1]);
+//    }
+    
+    cv::Mat merge;
+    images[0].copyTo(merge);
+    for (int i = 1; i < images.size(); i += 1) {
+        std::cout << shifts[i-1].first << " " << shifts[i-1].second << std::endl;
+        MergeImage(&merge, &images[i], shifts[i-1]).copyTo(merge);
+        shifts[i].first += shifts[i-1].first;
+        shifts[i].second += shifts[i-1].second;
+    }
+    
+    cv::imwrite(path + "pono.jpg", merge);
 }
 
 cv::Mat ImageStitch::CylindricalProjection(int ind)
@@ -46,23 +64,37 @@ cv::Mat ImageStitch::CylindricalProjection(int ind)
 	cv::Mat proj = cv::Mat(image.rows, image.cols, CV_8UC3);
 	proj = cv::Scalar::all(0);
 	double scale = focalLens[ind];
+    
+    for (int i = 0; i < image.rows; i += 1) {
+        for (int j = 0; j < image.cols; j += 1) {
+            double xp = j - image.cols / 2;
+            double yp = i - image.rows / 2;
+            
+			double theta = atan2(xp, focalLens[ind]);
+			double h = yp / sqrt(xp*xp + focalLens[ind]*focalLens[ind]);
+			double x = focalLens[ind] * theta + image.cols / 2;
+			double y = focalLens[ind] * h + image.rows / 2;
+            
+			proj.at<cv::Vec3b>(y, x) = image.at<cv::Vec3b>(i, j);
+        }
+    }
 
-	for (int i = 0; i < proj.rows; i += 1) {
-		for (int j = 0; j < proj.cols; j += 1) {
-			double xp = j - proj.cols / 2;
-			double yp = i - proj.rows / 2;
-
-			double x = focalLens[ind] * tan(xp / scale);
-			double y = sqrt(x*x + focalLens[ind]*focalLens[ind]) * yp / scale;
-
-			int newi = y + image.rows / 2;
-			int newj = x + image.cols / 2;
-			if (newi < 0 || newi >= image.rows) continue;
-			if (newj < 0 || newj >= image.cols) continue;
-
-			proj.at<cv::Vec3b>(i, j) = image.at<cv::Vec3b>(newi, newj);
-		}
-	}
+//	for (int i = 0; i < proj.rows; i += 1) {
+//		for (int j = 0; j < proj.cols; j += 1) {
+//			double xp = j - proj.cols / 2;
+//			double yp = i - proj.rows / 2;
+//
+//			double x = focalLens[ind] * tan(xp / scale);
+//			double y = sqrt(x*x + focalLens[ind]*focalLens[ind]) * yp / scale;
+//
+//			int newi = y + image.rows / 2;
+//			int newj = x + image.cols / 2;
+//			if (newi < 0 || newi >= image.rows) continue;
+//			if (newj < 0 || newj >= image.cols) continue;
+//
+//			proj.at<cv::Vec3b>(i, j) = image.at<cv::Vec3b>(newi, newj);
+//		}
+//	}
 
 	return proj;
 }
@@ -71,22 +103,33 @@ cv::Mat ImageStitch::CylindricalProjection(int ind)
 
 void ImageStitch::CalculateFeatures()
 {
-	std::fstream fa(path + "fa.txt", std::ios::in);
-	std::fstream fb(path + "fb.txt", std::ios::in);
-	std::fstream ma(path + "ma.txt", std::ios::in);
+    std::fstream fa, fb, ma;
+    
+    std::string tmpName = "";
+//    std::string tmpName = "denny";
+    
+    for(int im = 0; im+1 < images.size(); im += 1) {
+        fa.open(path + tmpName + std::to_string(im) + "fa.txt");
+        fb.open(path + tmpName + std::to_string(im) + "fb.txt");
+        ma.open(path + tmpName + std::to_string(im) + "ma.txt");
+        
+    	double x, y, a, b, i1, i2;
+    	while (fa >> x >> y >> a >> b) {
+    		features[im].push_back(std::make_pair(x, y));
+    	}
+    	while (fb >> x >> y >> a >> b) {
+    		features[im+1].push_back(std::make_pair(x, y));
+    	}
+    	while (ma >> i1 >> i2) {
+    		matches[im][im+1].push_back(std::make_pair(i1, i2));
+    		matches[im+1][im].push_back(std::make_pair(i2, i1));
+    	}
+        
+        fa.close();
+        fb.close();
+        ma.close();
+    }
 
-
-	double x, y, a, b, i1, i2;
-	while (fa >> x >> y >> a >> b) {
-		features[0].push_back(std::make_pair(x, y));
-	}
-	while (fb >> x >> y >> a >> b) {
-		features[1].push_back(std::make_pair(x, y));
-	}
-	while (ma >> i1 >> i2) {
-		matches[0][1].push_back(std::make_pair(i1, i2));
-		matches[1][0].push_back(std::make_pair(i2, i1));
-	}
 
 	// feature Cylindrical warping
 
@@ -113,7 +156,7 @@ void ImageStitch::CalculateFeatures()
 	cv::Mat mask2(merge, cv::Range(0, test2.rows), cv::Range(test1.cols, test1.cols + test2.cols));
 	test1.copyTo(mask1);
 	test2.copyTo(mask2);
-	for (int i = 0; i < matches[0][1].size() / 5; i += 1) {
+	for (int i = 0; i < matches[0][1].size() / 1; i += 1) {
 		const auto & ind = matches[0][1][i];
 		cv::line(merge,
 				 cv::Point(features[0][ind.first - 1].first, features[0][ind.first - 1].second),
@@ -132,42 +175,49 @@ std::pair<double, double> ImageStitch::RANSAC(int ind1, int ind2, double thres, 
 	std::pair<double, double> ret;
 	int maxInlierNum = 0;
 	std::pair<double, double> vect(0, 0), currvect;
-	for (int i = 0; i < k; i += 1) {
-		for (int j = 0; j < n; j += 1) {
-			int select = rand() % matches[ind1][ind2].size();
-			const auto & ind = matches[ind1][ind2][select];
-			vect.first += features[ind1][ind.first - 1].first - features[ind2][ind.second - 1].first;
-			vect.second += features[ind1][ind.first - 1].second - features[ind2][ind.second - 1].second;
-			vect.first /= n;
-			vect.second /= n;
-		}
+    
+//    do {
+        maxInlierNum = 0;
+    	for (int i = 0; i < k; i += 1) {
+            vect.first = vect.second = 0;
+    		for (int j = 0; j < n; j += 1) {
+    			int select = rand() % matches[ind1][ind2].size();
+    			const auto & ind = matches[ind1][ind2][select];
+    			vect.first += features[ind1][ind.first - 1].first - features[ind2][ind.second - 1].first;
+    			vect.second += features[ind1][ind.first - 1].second - features[ind2][ind.second - 1].second;
+    			vect.first /= n;
+    			vect.second /= n;
+    		}
 
-		int currInlierNum = 0;
-		double currDist = 0;
-		for (int j = 0; j < matches[ind1][ind2].size(); j += 1) {
-			const auto & ind = matches[ind1][ind2][j];
-			currvect.first = features[ind1][ind.first - 1].first - features[ind2][ind.second - 1].first;
-			currvect.second = features[ind1][ind.first - 1].second - features[ind2][ind.second - 1].second;
-			currDist += pow(vect.first - currvect.first, 2) + pow(vect.second - currvect.second, 2);
-			if (currDist < thres)
-				currInlierNum += 1;
-		}
-		if (currInlierNum > maxInlierNum) {
-			maxInlierNum = currInlierNum;
-			ret = vect;
-		}
-	}
-	std::cout << maxInlierNum << std::endl;
-
+    		int currInlierNum = 0;
+    		double currDist = 0;
+    		for (int j = 0; j < matches[ind1][ind2].size(); j += 1) {
+                currDist = 0;
+    			const auto & ind = matches[ind1][ind2][j];
+    			currvect.first = features[ind1][ind.first - 1].first - features[ind2][ind.second - 1].first;
+    			currvect.second = features[ind1][ind.first - 1].second - features[ind2][ind.second - 1].second;
+    			currDist += pow(vect.first - currvect.first, 2) + pow(vect.second - currvect.second, 2);
+    			if (currDist < thres)
+    				currInlierNum += 1;
+    		}
+    		if (currInlierNum > maxInlierNum) {
+    			maxInlierNum = currInlierNum;
+    			ret = vect;
+    		}
+    	}
+//        thres *= 1.5;
+//    } while ( maxInlierNum < matches[ind1][ind2].size()/2 );
+	std::cout << maxInlierNum << "/" << matches[ind1][ind2].size() << std::endl;
+    
+    
 	// test RANSAC
 	// MergeImage(&images[0], &images[1], ret);
 	
 	return ret;
 }
 
-cv::Mat ImageStitch::MergeImage(cv::Mat * img1, cv::Mat * img2, std::pair<int, int> shift)
+cv::Mat ImageStitch::MergeImage(cv::Mat * img1, cv::Mat * img2, std::pair<int, int> & shift)
 {
-	
 	int width, height;
 	if (shift.first < 0) {
 		std::swap(img1, img2);
@@ -175,7 +225,7 @@ cv::Mat ImageStitch::MergeImage(cv::Mat * img1, cv::Mat * img2, std::pair<int, i
 	}
 	width = std::max(img1->cols, img2->cols + shift.first);
 	if (shift.second < 0) {
-		height = std::max(img1->rows, img2->rows - shift.second);
+		height = std::max(img1->rows - shift.second, img2->rows);
 	}
 	else {
 		height = std::max(img1->rows, img2->rows + shift.second);
@@ -184,15 +234,17 @@ cv::Mat ImageStitch::MergeImage(cv::Mat * img1, cv::Mat * img2, std::pair<int, i
 	cv::Mat merge(height, width, img1->type());
 	merge = cv::Scalar::all(0);
 	if (shift.second < 0) {
-		cv::Mat mask(merge, cv::Range(-shift.second, -shift.second+img1->rows),
-						    cv::Range(0, img1->cols));
-		img1->copyTo(mask);
+        cv::Mat mask(merge, cv::Range(-shift.second, -shift.second+img1->rows),
+                            cv::Range(0, img1->cols));
+        img1->copyTo(mask);
 	}
 	else {
 		cv::Mat mask(merge, cv::Range(0, img1->rows),
 						    cv::Range(0, img1->cols));
 		img1->copyTo(mask);
 	}
+    
+    if (shift.second < 0) shift.second = 0;
 
 	double overlap = img1->cols + img2->cols - width;
 	for (int i = 0; i < img2->cols; i += 1) {

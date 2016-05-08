@@ -17,7 +17,7 @@ int main(int argc, const char * argv[])
 {
 	// insert code here...
 	srand((unsigned int)time(NULL));
-	std::string path = "/Users/Allen/Documents/workspace/NTU104-2_Digital-Visual-Effects/Project 2 - image stitching/ImageStitching/denny/";
+	std::string path = "/Users/Allen/Documents/workspace/NTU104-2_Digital-Visual-Effects/Project 2 - image stitching/ImageStitching/grail/";
 	//std::string path = "../../";
     
 

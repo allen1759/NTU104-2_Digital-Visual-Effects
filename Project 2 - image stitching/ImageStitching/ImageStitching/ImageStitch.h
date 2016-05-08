@@ -21,9 +21,10 @@ public:
 	void StartStitching();
 	cv::Mat CylindricalProjection(int ind);
 	void CalculateFeatures();
-    void CalculateFeatures_Around();
+    void CalculateFeatures_End2End();
 	std::pair<double, double> RANSAC(int ind1, int ind2, double thres, int k = 50, int n = 1);
 	cv::Mat MergeImage(cv::Mat * img1, cv::Mat * img2, std::pair<int, int> & shift);
+    cv::Mat MergeImage_Crop(cv::Mat * img1, cv::Mat * img2, std::pair<int, int> & shift);
 
 private:
 public:

@@ -50,7 +50,8 @@ void ImageStitch::StartStitching()
     images[0].copyTo(merge);
     for (int i = 1; i < images.size(); i += 1) {
         std::cout << shifts[i-1].first << " " << shifts[i-1].second << std::endl;
-        MergeImage(&merge, &images[i], shifts[i-1]).copyTo(merge);
+//        MergeImage(&merge, &images[i], shifts[i-1]).copyTo(merge);
+        MergeImage_Crop(&merge, &images[i], shifts[i-1]).copyTo(merge);
         shifts[i].first += shifts[i-1].first;
         shifts[i].second += shifts[i-1].second;
     }
@@ -172,14 +173,20 @@ void ImageStitch::CalculateFeatures()
 	cv::destroyWindow("2 image feature matching");
 }
 
-void ImageStitch::CalculateFeatures_Around()
+void ImageStitch::CalculateFeatures_End2End()
 {
     std::fstream fa, fb, ma;
     
     for(int im = 0; im+1 < images.size(); im += 1) {
         fa.open(path + std::to_string(im) + "fa.txt");
+        if( !fa.is_open() )
+            std::cout << path + std::to_string(im) + "fa.txt not open" << std::endl;
         fb.open(path + std::to_string(im) + "fb.txt");
+        if( !fb.is_open() )
+            std::cout << path + std::to_string(im) + "fb.txt not open" << std::endl;
         ma.open(path + std::to_string(im) + "ma.txt");
+        if( !ma.is_open() )
+            std::cout << path + std::to_string(im) + "ma.txt not open" << std::endl;
         
     	double x, y, a, b, i1, i2;
     	while (fa >> x >> y >> a >> b) {
@@ -232,9 +239,9 @@ void ImageStitch::CalculateFeatures_Around()
 				 cv::Scalar(255, 0, 0));
 	}
 
-	cv::imshow("2 image feature matching - around", merge);
+	cv::imshow("2 image feature matching - end to end", merge);
 	cv::waitKey();
-	cv::destroyWindow("2 image feature matching - around");
+	cv::destroyWindow("2 image feature matching - end to end");
 }
 
 
@@ -342,4 +349,148 @@ cv::Mat ImageStitch::MergeImage(cv::Mat * img1, cv::Mat * img2, std::pair<int, i
 	cv::destroyWindow("merge");
 
 	return merge;
+}
+
+cv::Mat ImageStitch::MergeImage_Crop(cv::Mat * img1, cv::Mat * img2, std::pair<int, int> & shift)
+{
+	int width, height;
+	if (shift.first < 0) {
+		std::swap(img1, img2);
+		shift = std::make_pair(-shift.first, -shift.second);
+	}
+	width = std::max(img1->cols, img2->cols + shift.first);
+	if (shift.second < 0) {
+		height = std::max(img1->rows - shift.second, img2->rows);
+	}
+	else {
+		height = std::max(img1->rows, img2->rows + shift.second);
+	}
+
+	cv::Mat merge(height, width, img1->type());
+	merge = cv::Scalar::all(0);
+	if (shift.second < 0) {
+        cv::Mat mask(merge, cv::Range(-shift.second, -shift.second+img1->rows),
+                            cv::Range(0, img1->cols));
+        img1->copyTo(mask);
+	}
+	else {
+		cv::Mat mask(merge, cv::Range(0, img1->rows),
+						    cv::Range(0, img1->cols));
+		img1->copyTo(mask);
+	}
+    
+    if (shift.second < 0) shift.second = 0;
+
+	double overlap = img1->cols + img2->cols - width;
+	for (int i = 0; i < img2->cols; i += 1) {
+		double weight = 1.0;
+		if (overlap > i && overlap!=0) {
+			weight = i / overlap;
+		}
+		for (int j = 0; j < img2->rows; j += 1) {
+			cv::Vec3f p1 = img2->at<cv::Vec3b>(j, i);
+			cv::Vec3f p2 = merge.at<cv::Vec3b>(j + shift.second, i + shift.first);
+			if (p1.val[0] + p1.val[1] + p1.val[2] <= 3)
+				continue;
+			else if (weight >= 1 || p2.val[0] + p2.val[1] + p2.val[2] <= 3) {
+				merge.at<cv::Vec3b>(j + shift.second, i + shift.first) = p1;
+				continue;
+			}
+			else {
+				merge.at<cv::Vec3b>(j + shift.second, i + shift.first) = p1 * weight +
+																		 p2 * (1 - weight);
+			}
+		}
+	}
+    
+    
+    int left = 0, right = merge.cols-1, mid = merge.rows/2;
+    for (int i = 0; i < merge.cols; i += 1) {
+        int val = 0;
+        for (int s = -1; s <= 1; s += 1) {
+            for (int v = 0; v < 3; v += 1)
+                val += merge.at<cv::Vec3b>(mid + s, i).val[v];
+        }
+        
+        if (val <= 3) {
+            left = std::max( left, i );
+        }
+        else {
+            left = std::max( left, i );
+            break;
+        }
+    }
+    for (int i = merge.cols-1; i >= 0; i -= 1) {
+        int val = 0;
+        for (int s = -1; s <= 1; s += 1) {
+            for (int v = 0; v < 3; v += 1)
+                val += merge.at<cv::Vec3b>(mid + s, i).val[v];
+        }
+        
+        if (val <= 3) {
+            right = std::min( right, i );
+        }
+        else {
+            right = std::min( right, i );
+            break;
+        }
+    }
+    
+    // compute top and bot position
+    int maxtop = 0, minbot = merge.rows-1;
+    int searchRange = 10;
+    for (int i = left; i < left + searchRange; i += 1) {
+        for (int j = 0; j < merge.rows; j += 1) {
+            cv::Vec3b pixel = merge.at<cv::Vec3b>(j, i);
+            if (pixel.val[0] + pixel.val[1] + pixel.val[2] <= 3) {
+                maxtop = std::max(maxtop, j);
+            }
+            else {
+                break;
+            }
+        }
+        
+        for (int j = merge.rows-1; j >= 0; j -= 1) {
+            cv::Vec3b pixel = merge.at<cv::Vec3b>(j, i);
+            if (pixel.val[0] + pixel.val[1] + pixel.val[2] <= 3) {
+                minbot = std::min(minbot, j);
+            }
+            else {
+                break;
+            }
+        }
+    }
+    
+    
+    for (int i = right; i > right - searchRange; i -= 1) {
+        for (int j = 0; j < merge.rows; j += 1) {
+            cv::Vec3f pixel = merge.at<cv::Vec3b>(j, i);
+            if (pixel.val[0] + pixel.val[1] + pixel.val[2] <= 3) {
+                maxtop = std::max(maxtop, j);
+            }
+            else {
+                break;
+            }
+        }
+        
+        for (int j = merge.rows-1; j >= 0; j -= 1) {
+            cv::Vec3f pixel = merge.at<cv::Vec3b>(j, i);
+            if (pixel.val[0] + pixel.val[1] + pixel.val[2] <= 3) {
+                minbot = std::min(minbot, j);
+            }
+            else {
+                break;
+            }
+        }
+    }
+    
+    cv::Mat mergeCrop = merge( cv::Rect(left, maxtop, right-left+1, minbot-maxtop+1) );
+    shift.first -= left;
+    shift.second -= maxtop;
+
+	cv::imshow("merge crop", mergeCrop);
+	cv::waitKey();
+	cv::destroyWindow("merge crop");
+
+	return mergeCrop;
 }

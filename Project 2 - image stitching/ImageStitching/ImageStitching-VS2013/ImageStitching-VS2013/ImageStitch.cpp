@@ -155,7 +155,7 @@ cv::Mat ImageStitch::CylindricalProjection(int ind)
 //		}
 //	}
     
-    cv::imwrite(path + std::to_string(ind) + ".jpg", proj);
+    //cv::imwrite(path + std::to_string(ind) + ".jpg", proj);
 
 	return proj;
 }

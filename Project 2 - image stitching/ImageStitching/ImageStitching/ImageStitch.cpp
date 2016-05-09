@@ -54,15 +54,17 @@ void ImageStitch::StartStitching(bool crop, bool end2end)
             cntYshift += shifts[i].second;
         }
         int adjust = cntYshift / (int)( images.size() );
-//        for (int i = 0; i < images.size(); i += 1) {
-//            shifts[i].second -= adjust;
-//        }
+        for (int i = 0; i < images.size(); i += 1) {
+            shifts[i].second -= adjust;
+        }
         
         if (crop) {
             images[0].copyTo(merge);
             for (int i = 1; i <= images.size(); i += 1) {
                 std::cout << shifts[i-1].first << " " << shifts[i-1].second << std::endl;
                 MergeImage_Crop(&merge, &images[i%images.size()], shifts[i-1]).copyTo(merge);
+				if (i >= shifts.size())
+					continue;
                 shifts[i].first += shifts[i-1].first;
                 shifts[i].second += shifts[i-1].second;
             }
@@ -72,6 +74,8 @@ void ImageStitch::StartStitching(bool crop, bool end2end)
             for (int i = 1; i <= images.size(); i += 1) {
                 std::cout << shifts[i-1].first << " " << shifts[i-1].second << std::endl;
                 MergeImage(&merge, &images[i%images.size()], shifts[i-1]).copyTo(merge);
+				if (i >= shifts.size())
+					continue;
                 shifts[i].first += shifts[i-1].first;
                 shifts[i].second += shifts[i-1].second;
             }
@@ -89,6 +93,8 @@ void ImageStitch::StartStitching(bool crop, bool end2end)
             for (int i = 1; i < images.size(); i += 1) {
                 std::cout << shifts[i-1].first << " " << shifts[i-1].second << std::endl;
                 MergeImage_Crop(&merge, &images[i], shifts[i-1]).copyTo(merge);
+				if (i >= shifts.size())
+					continue;
                 shifts[i].first += shifts[i-1].first;
                 shifts[i].second += shifts[i-1].second;
             }
@@ -98,6 +104,8 @@ void ImageStitch::StartStitching(bool crop, bool end2end)
             for (int i = 1; i < images.size(); i += 1) {
                 std::cout << shifts[i-1].first << " " << shifts[i-1].second << std::endl;
                 MergeImage(&merge, &images[i], shifts[i-1]).copyTo(merge);
+				if (i >= shifts.size())
+					continue;
                 shifts[i].first += shifts[i-1].first;
                 shifts[i].second += shifts[i-1].second;
             }
@@ -105,7 +113,7 @@ void ImageStitch::StartStitching(bool crop, bool end2end)
     }
     
     
-    
+	cv::imshow("Result Panorama", merge);
     cv::imwrite(path + "mypano.jpg", merge);
 }
 
@@ -335,11 +343,11 @@ std::pair<double, double> ImageStitch::RANSAC(int ind1, int ind2, double thres, 
     
     
 	// test RANSAC
-    std::pair<int, int> tmp = std::make_pair((int)ret.first, (int)ret.second);
-    cv::Mat tmpImage = MergeImage(&images[ind1], &images[ind2], tmp);
-    if (ind1 == 6) {
-        cv::imwrite(path + "tmp.jpg", tmpImage);
-    }
+    //std::pair<int, int> tmp = std::make_pair((int)ret.first, (int)ret.second);
+    //cv::Mat tmpImage = MergeImage(&images[ind1], &images[ind2], tmp);
+    //if (ind1 == 6) {
+    //    cv::imwrite(path + "tmp.jpg", tmpImage);
+    //}
 	
 	return ret;
 }
@@ -397,9 +405,9 @@ cv::Mat ImageStitch::MergeImage(cv::Mat * img1, cv::Mat * img2, std::pair<int, i
 	}
 
 
-	cv::imshow("merge", merge);
-	cv::waitKey();
-	cv::destroyWindow("merge");
+	//cv::imshow("merge", merge);
+	//cv::waitKey();
+	//cv::destroyWindow("merge");
 
 	return merge;
 }
@@ -541,9 +549,9 @@ cv::Mat ImageStitch::MergeImage_Crop(cv::Mat * img1, cv::Mat * img2, std::pair<i
     shift.first -= left;
     shift.second -= maxtop;
 
-	cv::imshow("merge crop", mergeCrop);
-	cv::waitKey();
-	cv::destroyWindow("merge crop");
+	//cv::imshow("merge crop", mergeCrop);
+	//cv::waitKey();
+	//cv::destroyWindow("merge crop");
 
 	return mergeCrop;
 }

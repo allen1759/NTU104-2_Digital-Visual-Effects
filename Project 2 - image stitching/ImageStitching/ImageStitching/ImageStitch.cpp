@@ -30,31 +30,81 @@ ImageStitch::ImageStitch(const std::string & p) : path(p)
 	features.resize( images.size() );
 }
 
-void ImageStitch::StartStitching()
+void ImageStitch::StartStitching(bool crop, bool end2end)
 {
 	for (int i = 0; i < images.size(); i += 1) {
 		images[i] = CylindricalProjection(i);
 	}
-	CalculateFeatures();
+    if (end2end) {
+        CalculateFeatures_End2End();
+    }
+    else {
+    	CalculateFeatures();
+    }
 
     std::vector< std::pair<int, int> > shifts;
-    for (int i = 0; i+1 < images.size(); i += 1) {
-        shifts.push_back( RANSAC(i, i+1, 50.0, 500, 1) );
-    }
-    
-//    for (int i=1; i < images.size(); i += 1) {
-//        MergeImage(&images[i-1], &images[i], shifts[i-1]);
-//    }
-    
     cv::Mat merge;
-    images[0].copyTo(merge);
-    for (int i = 1; i < images.size(); i += 1) {
-        std::cout << shifts[i-1].first << " " << shifts[i-1].second << std::endl;
-//        MergeImage(&merge, &images[i], shifts[i-1]).copyTo(merge);
-        MergeImage_Crop(&merge, &images[i], shifts[i-1]).copyTo(merge);
-        shifts[i].first += shifts[i-1].first;
-        shifts[i].second += shifts[i-1].second;
+    
+    if (end2end) {
+        for (int i = 0; i < images.size(); i += 1) {
+            shifts.push_back( RANSAC(i, (i+1)%images.size(), 50.0, 500, 1) );
+        }
+        int cntYshift = 0;
+        for (int i = 0; i < images.size(); i += 1) {
+            cntYshift += shifts[i].second;
+        }
+        int adjust = cntYshift / (int)( images.size() );
+//        for (int i = 0; i < images.size(); i += 1) {
+//            shifts[i].second -= adjust;
+//        }
+        
+        if (crop) {
+            images[0].copyTo(merge);
+            for (int i = 1; i <= images.size(); i += 1) {
+                std::cout << shifts[i-1].first << " " << shifts[i-1].second << std::endl;
+                MergeImage_Crop(&merge, &images[i%images.size()], shifts[i-1]).copyTo(merge);
+                shifts[i].first += shifts[i-1].first;
+                shifts[i].second += shifts[i-1].second;
+            }
+        }
+        else {
+            images[0].copyTo(merge);
+            for (int i = 1; i <= images.size(); i += 1) {
+                std::cout << shifts[i-1].first << " " << shifts[i-1].second << std::endl;
+                MergeImage(&merge, &images[i%images.size()], shifts[i-1]).copyTo(merge);
+                shifts[i].first += shifts[i-1].first;
+                shifts[i].second += shifts[i-1].second;
+            }
+        }
+        
     }
+    
+    else {
+        for (int i = 0; i+1 < images.size(); i += 1) {
+            shifts.push_back( RANSAC(i, i+1, 50.0, 500, 1) );
+        }
+        
+        if (crop) {
+            images[0].copyTo(merge);
+            for (int i = 1; i < images.size(); i += 1) {
+                std::cout << shifts[i-1].first << " " << shifts[i-1].second << std::endl;
+                MergeImage_Crop(&merge, &images[i], shifts[i-1]).copyTo(merge);
+                shifts[i].first += shifts[i-1].first;
+                shifts[i].second += shifts[i-1].second;
+            }
+        }
+        else {
+            images[0].copyTo(merge);
+            for (int i = 1; i < images.size(); i += 1) {
+                std::cout << shifts[i-1].first << " " << shifts[i-1].second << std::endl;
+                MergeImage(&merge, &images[i], shifts[i-1]).copyTo(merge);
+                shifts[i].first += shifts[i-1].first;
+                shifts[i].second += shifts[i-1].second;
+            }
+        }
+    }
+    
+    
     
     cv::imwrite(path + "mypano.jpg", merge);
 }
@@ -96,6 +146,8 @@ cv::Mat ImageStitch::CylindricalProjection(int ind)
 //			proj.at<cv::Vec3b>(i, j) = image.at<cv::Vec3b>(newi, newj);
 //		}
 //	}
+    
+    cv::imwrite(path + std::to_string(ind) + ".jpg", proj);
 
 	return proj;
 }
@@ -177,7 +229,7 @@ void ImageStitch::CalculateFeatures_End2End()
 {
     std::fstream fa, fb, ma;
     
-    for(int im = 0; im+1 < images.size(); im += 1) {
+    for(int im = 0; im < images.size(); im += 1) {
         fa.open(path + std::to_string(im) + "fa.txt");
         if( !fa.is_open() )
             std::cout << path + std::to_string(im) + "fa.txt not open" << std::endl;
@@ -192,8 +244,8 @@ void ImageStitch::CalculateFeatures_End2End()
     	while (fa >> x >> y >> a >> b) {
     		features[im].push_back(std::make_pair(x, y));
     	}
-    	while (fb >> x >> y >> a >> b) {
-    		features[im+1].push_back(std::make_pair(x, y));
+    	while (fb >> x >> y >> a >> b && im+1 < features.size() ) {
+            features[im+1].push_back(std::make_pair(x, y));
     	}
     	while (ma >> i1 >> i2) {
     		matches[im][(im+1) % images.size()].push_back(std::make_pair(i1, i2));
@@ -224,18 +276,18 @@ void ImageStitch::CalculateFeatures_End2End()
 
 
 	// test feature matching
-	cv::Mat & test1 = images[0];
-	cv::Mat & test2 = images[1];
+	cv::Mat & test1 = images[6];
+	cv::Mat & test2 = images[7];
 	cv::Mat merge(test1.rows, test1.cols * 2, test1.type());
 	cv::Mat mask1(merge, cv::Range(0, test1.rows), cv::Range(0, test1.cols));
 	cv::Mat mask2(merge, cv::Range(0, test2.rows), cv::Range(test1.cols, test1.cols + test2.cols));
 	test1.copyTo(mask1);
 	test2.copyTo(mask2);
-	for (int i = 0; i < matches[0][1].size() / 1; i += 1) {
-		const auto & ind = matches[0][1][i];
+	for (int i = 0; i < matches[6][7].size() / 1; i += 1) {
+		const auto & ind = matches[6][7][i];
 		cv::line(merge,
-				 cv::Point(features[0][ind.first - 1].first, features[0][ind.first - 1].second),
-				 cv::Point(features[1][ind.second - 1].first + test1.cols, features[1][ind.second - 1].second),
+				 cv::Point(features[6][ind.first - 1].first, features[6][ind.first - 1].second),
+				 cv::Point(features[7][ind.second - 1].first + test1.cols, features[7][ind.second - 1].second),
 				 cv::Scalar(255, 0, 0));
 	}
 
@@ -251,42 +303,43 @@ std::pair<double, double> ImageStitch::RANSAC(int ind1, int ind2, double thres, 
 	int maxInlierNum = 0;
 	std::pair<double, double> vect(0, 0), currvect;
     
-//    do {
-        maxInlierNum = 0;
-    	for (int i = 0; i < k; i += 1) {
-            vect.first = vect.second = 0;
-    		for (int j = 0; j < n; j += 1) {
-    			int select = rand() % matches[ind1][ind2].size();
-    			const auto & ind = matches[ind1][ind2][select];
-    			vect.first += features[ind1][ind.first - 1].first - features[ind2][ind.second - 1].first;
-    			vect.second += features[ind1][ind.first - 1].second - features[ind2][ind.second - 1].second;
-    			vect.first /= n;
-    			vect.second /= n;
-    		}
+	for (int i = 0; i < k; i += 1) {
+        vect.first = vect.second = 0;
+		for (int j = 0; j < n; j += 1) {
+			int select = rand() % matches[ind1][ind2].size();
+			const auto & ind = matches[ind1][ind2][select];
+			vect.first += features[ind1][ind.first - 1].first - features[ind2][ind.second - 1].first;
+			vect.second += features[ind1][ind.first - 1].second - features[ind2][ind.second - 1].second;
+			vect.first /= n;
+			vect.second /= n;
+		}
 
-    		int currInlierNum = 0;
-    		double currDist = 0;
-    		for (int j = 0; j < matches[ind1][ind2].size(); j += 1) {
-                currDist = 0;
-    			const auto & ind = matches[ind1][ind2][j];
-    			currvect.first = features[ind1][ind.first - 1].first - features[ind2][ind.second - 1].first;
-    			currvect.second = features[ind1][ind.first - 1].second - features[ind2][ind.second - 1].second;
-    			currDist += pow(vect.first - currvect.first, 2) + pow(vect.second - currvect.second, 2);
-    			if (currDist < thres)
-    				currInlierNum += 1;
-    		}
-    		if (currInlierNum > maxInlierNum) {
-    			maxInlierNum = currInlierNum;
-    			ret = vect;
-    		}
-    	}
-//        thres *= 1.5;
-//    } while ( maxInlierNum < matches[ind1][ind2].size()/2 );
+		int currInlierNum = 0;
+		double currDist = 0;
+		for (int j = 0; j < matches[ind1][ind2].size(); j += 1) {
+            currDist = 0;
+			const auto & ind = matches[ind1][ind2][j];
+			currvect.first = features[ind1][ind.first - 1].first - features[ind2][ind.second - 1].first;
+			currvect.second = features[ind1][ind.first - 1].second - features[ind2][ind.second - 1].second;
+			currDist += pow(vect.first - currvect.first, 2) + pow(vect.second - currvect.second, 2);
+			if (currDist < thres)
+				currInlierNum += 1;
+		}
+		if (currInlierNum > maxInlierNum) {
+			maxInlierNum = currInlierNum;
+			ret = vect;
+		}
+	}
+    
 	std::cout << maxInlierNum << "/" << matches[ind1][ind2].size() << std::endl;
     
     
 	// test RANSAC
-	// MergeImage(&images[0], &images[1], ret);
+    std::pair<int, int> tmp = std::make_pair((int)ret.first, (int)ret.second);
+    cv::Mat tmpImage = MergeImage(&images[ind1], &images[ind2], tmp);
+    if (ind1 == 6) {
+        cv::imwrite(path + "tmp.jpg", tmpImage);
+    }
 	
 	return ret;
 }

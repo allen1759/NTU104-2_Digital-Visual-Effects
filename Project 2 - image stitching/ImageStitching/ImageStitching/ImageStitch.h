@@ -18,16 +18,20 @@ class ImageStitch
 public:
 
 	ImageStitch(const std::string & p);
-	void StartStitching();
+	void StartStitching(bool crop = false, bool end2end = false);
+    
 	cv::Mat CylindricalProjection(int ind);
 	void CalculateFeatures();
     void CalculateFeatures_End2End();
+    
 	std::pair<double, double> RANSAC(int ind1, int ind2, double thres, int k = 50, int n = 1);
+    
 	cv::Mat MergeImage(cv::Mat * img1, cv::Mat * img2, std::pair<int, int> & shift);
     cv::Mat MergeImage_Crop(cv::Mat * img1, cv::Mat * img2, std::pair<int, int> & shift);
+	cv::Mat MergeImage_End2End(cv::Mat * img1, cv::Mat * img2, std::pair<int, int> & shift);
+//    cv::Mat MergeImage_Crop(cv::Mat * img1, cv::Mat * img2, std::pair<int, int> & shift);
 
 private:
-public:
 	static const int MAX_IMAGE_SIZE = 30;
 	std::string path;
 	std::string parameter = "parameter.txt";

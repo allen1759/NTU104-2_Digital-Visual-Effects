@@ -1,4 +1,4 @@
-﻿//
+//
 //  main.cpp
 //  ImageStitching
 //
@@ -16,12 +16,13 @@
 int main(int argc, const char * argv[])
 {
 	// insert code here...
-	srand(time(NULL));
-	//std::string path = "/Users/Allen/Documents/workspace/NTU104-2_Digital-Visual-Effects/Project 2 - image stitching/ImageStitching/"
-	std::string path = "../../";
+	srand((unsigned int)time(NULL));
+	//std::string path = "/Users/Allen/Documents/workspace/NTU104-2_Digital-Visual-Effects/Project 2 - image stitching/ImageStitching/denny/";
+	std::string path = "../../denny/";
+    
 
 	ImageStitch stitch(path);
-	stitch.StartStitching();
+	stitch.StartStitching(false, true);
 
 
 	return 0;

@@ -12,12 +12,13 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <vector>
 #include <string>
+#include "Image.h"
 
 class ImageStitch
 {
 public:
 
-	ImageStitch(const std::string & p);
+	ImageStitch(const std::string & p, vector<Image> imgs);
 	void StartStitching(bool crop = false, bool end2end = false);
     
 	cv::Mat CylindricalProjection(int ind);
@@ -34,8 +35,7 @@ public:
 private:
 	static const int MAX_IMAGE_SIZE = 30;
 	std::string path;
-	std::string parameter = "parameter.txt";
-
+	//std::string parameter = "parameter.txt";
 	std::vector<double> focalLens;
 	std::vector< cv::Mat > images;
 

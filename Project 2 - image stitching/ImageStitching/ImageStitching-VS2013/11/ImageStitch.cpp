@@ -15,21 +15,31 @@
 #include <queue>
 #include <opencv2/imgproc/imgproc.hpp>
 
-ImageStitch::ImageStitch(const std::string & p) : path(p)
+ImageStitch::ImageStitch(const std::string & p, vector<Image> imgs) : path(p)
 {
-	std::fstream para(path + parameter, std::ios::in);
-    std::cout << path + parameter << std::endl;
-
-	std::string str;
-	while (para >> str) {
-		images.push_back( cv::imread(path + str) );
-        cv::imshow("tes", images.back());
-		double FL;
-		para >> FL;
-		focalLens.push_back(FL);
+	for (int i = 0; i < imgs.size(); i++)
+	{
+		images.push_back(imgs[i].image);
+		focalLens.push_back(imgs[i].focalLen);
 	}
-
-	features.resize( images.size() );
+	features.resize(images.size());
+	for (int im = 0; im < images.size(); im += 1)
+	{
+		for (int i = 0; i < imgs[im].keypoints.size(); i += 1)
+		{
+			FeaturePoint f = imgs[im].keypoints[i];
+			features[im].push_back(std::make_pair(f.position.x, f.position.y));
+		}
+	}
+	for (int im = 0; im + 1 < images.size(); im += 1)
+	{
+		for (int i = 0; i < imgs[im].matches.size(); i++)
+		{
+			Match m = imgs[im].matches[i];
+			matches[im][im + 1].push_back(std::make_pair(m.queryIndex, m.trainIndex));
+			matches[im + 1][im].push_back(std::make_pair(m.trainIndex, m.queryIndex));
+		}
+	}
 }
 
 void ImageStitch::StartStitching(bool crop, bool end2end)
@@ -113,9 +123,8 @@ void ImageStitch::StartStitching(bool crop, bool end2end)
             }
         }
     }
-    
-    
-	cv::imshow("Result Panorama", merge);
+
+	//cv::imshow("Result Panorama", merge);
     cv::imwrite(path + "mypano.jpg", merge);
 }
 
@@ -166,37 +175,7 @@ cv::Mat ImageStitch::CylindricalProjection(int ind)
 
 void ImageStitch::CalculateFeatures()
 {
-    std::fstream fa, fb, ma;
-    
-    for(int im = 0; im+1 < images.size(); im += 1) {
-        fa.open(path + std::to_string(im) + "fa.txt");
-        if( !fa.is_open() )
-            std::cout << path + std::to_string(im) + "fa.txt not open" << std::endl;
-        fb.open(path + std::to_string(im) + "fb.txt");
-        if( !fb.is_open() )
-            std::cout << path + std::to_string(im) + "fb.txt not open" << std::endl;
-        ma.open(path + std::to_string(im) + "ma.txt");
-        if( !ma.is_open() )
-            std::cout << path + std::to_string(im) + "ma.txt not open" << std::endl;
-        
-    	double x, y, a, b, i1, i2;
-    	while (fa >> x >> y >> a >> b) {
-    		features[im].push_back(std::make_pair(x, y));
-    	}
-    	while (fb >> x >> y >> a >> b) {
-    		features[im+1].push_back(std::make_pair(x, y));
-    	}
-    	while (ma >> i1 >> i2) {
-    		matches[im][im+1].push_back(std::make_pair(i1, i2));
-    		matches[im+1][im].push_back(std::make_pair(i2, i1));
-    	}
-        
-        fa.close();
-        fb.close();
-        ma.close();
-    }
-
-
+  
 	// feature Cylindrical warping
 
 	for (int i = 0; i < images.size(); i += 1) {
@@ -213,7 +192,7 @@ void ImageStitch::CalculateFeatures()
 		}
 	}
 
-
+	/*
 	// test feature matching
 	cv::Mat & test1 = images[0];
 	cv::Mat & test2 = images[1];
@@ -233,6 +212,7 @@ void ImageStitch::CalculateFeatures()
 	cv::imshow("2 image feature matching", merge);
 	cv::waitKey();
 	cv::destroyWindow("2 image feature matching");
+	*/
 }
 
 void ImageStitch::CalculateFeatures_End2End()
@@ -318,8 +298,8 @@ std::pair<double, double> ImageStitch::RANSAC(int ind1, int ind2, double thres, 
 		for (int j = 0; j < n; j += 1) {
 			int select = rand() % matches[ind1][ind2].size();
 			const auto & ind = matches[ind1][ind2][select];
-			vect.first += features[ind1][ind.first - 1].first - features[ind2][ind.second - 1].first;
-			vect.second += features[ind1][ind.first - 1].second - features[ind2][ind.second - 1].second;
+			vect.first += features[ind1][ind.first].first - features[ind2][ind.second].first;
+			vect.second += features[ind1][ind.first].second - features[ind2][ind.second].second;
 			vect.first /= n;
 			vect.second /= n;
 		}
@@ -329,8 +309,8 @@ std::pair<double, double> ImageStitch::RANSAC(int ind1, int ind2, double thres, 
 		for (int j = 0; j < matches[ind1][ind2].size(); j += 1) {
             currDist = 0;
 			const auto & ind = matches[ind1][ind2][j];
-			currvect.first = features[ind1][ind.first - 1].first - features[ind2][ind.second - 1].first;
-			currvect.second = features[ind1][ind.first - 1].second - features[ind2][ind.second - 1].second;
+			currvect.first = features[ind1][ind.first].first - features[ind2][ind.second].first;
+			currvect.second = features[ind1][ind.first].second - features[ind2][ind.second].second;
 			currDist += pow(vect.first - currvect.first, 2) + pow(vect.second - currvect.second, 2);
 			if (currDist < thres)
 				currInlierNum += 1;
@@ -407,9 +387,9 @@ cv::Mat ImageStitch::MergeImage(cv::Mat * img1, cv::Mat * img2, std::pair<int, i
 	}
 
 
-	//cv::imshow("merge", merge);
-	//cv::waitKey();
-	//cv::destroyWindow("merge");
+	cv::imshow("merge", merge);
+	cv::waitKey();
+	cv::destroyWindow("merge");
 
 	return merge;
 }

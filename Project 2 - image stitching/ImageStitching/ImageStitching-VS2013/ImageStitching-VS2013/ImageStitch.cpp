@@ -23,6 +23,7 @@ ImageStitch::ImageStitch(const std::string & p, vector<Image> imgs) : path(p)
 		focalLens.push_back(imgs[i].focalLen);
 	}
 	features.resize(images.size());
+	//std::cout << "text1\n";
 	for (int im = 0; im < images.size(); im += 1)
 	{
 		for (int i = 0; i < imgs[im].keypoints.size(); i += 1)
@@ -31,6 +32,7 @@ ImageStitch::ImageStitch(const std::string & p, vector<Image> imgs) : path(p)
 			features[im].push_back(std::make_pair(f.position.x, f.position.y));
 		}
 	}
+	//std::cout << "text2\n";
 	for (int im = 0; im + 1 < images.size(); im += 1)
 	{
 		for (int i = 0; i < imgs[im].matches.size(); i++)
@@ -40,10 +42,12 @@ ImageStitch::ImageStitch(const std::string & p, vector<Image> imgs) : path(p)
 			matches[im + 1][im].push_back(std::make_pair(m.trainIndex, m.queryIndex));
 		}
 	}
+	//std::cout << "text3\n";
 }
 
 void ImageStitch::StartStitching(bool crop, bool end2end)
 {
+	std::cout << "Execute Cylindrical Projection.\n";
 	for (int i = 0; i < images.size(); i += 1) {
 		images[i] = CylindricalProjection(i);
 	}
@@ -73,7 +77,7 @@ void ImageStitch::StartStitching(bool crop, bool end2end)
         if (crop) {
             images[0].copyTo(merge);
             for (int i = 1; i <= images.size(); i += 1) {
-                std::cout << shifts[i-1].first << " " << shifts[i-1].second << std::endl;
+                //std::cout << shifts[i-1].first << " " << shifts[i-1].second << std::endl;
                 MergeImage_Crop(&merge, &images[i%images.size()], shifts[i-1]).copyTo(merge);
 				if (i >= shifts.size())
 					continue;
@@ -84,7 +88,7 @@ void ImageStitch::StartStitching(bool crop, bool end2end)
         else {
             images[0].copyTo(merge);
             for (int i = 1; i <= images.size(); i += 1) {
-                std::cout << shifts[i-1].first << " " << shifts[i-1].second << std::endl;
+                //std::cout << shifts[i-1].first << " " << shifts[i-1].second << std::endl;
                 MergeImage(&merge, &images[i%images.size()], shifts[i-1]).copyTo(merge);
 				if (i >= shifts.size())
 					continue;
@@ -96,14 +100,15 @@ void ImageStitch::StartStitching(bool crop, bool end2end)
     }
     
     else {
+		std::cout << "Execute image matching using RANSAC.\n";
         for (int i = 0; i+1 < images.size(); i += 1) {
             shifts.push_back( RANSAC(i, i+1, 50.0, 500, 1) );
         }
-        
+		std::cout << "Merge Images.\n";
         if (crop) {
             images[0].copyTo(merge);
             for (int i = 1; i < images.size(); i += 1) {
-                std::cout << shifts[i-1].first << " " << shifts[i-1].second << std::endl;
+                //std::cout << shifts[i-1].first << " " << shifts[i-1].second << std::endl;
                 MergeImage_Crop(&merge, &images[i], shifts[i-1]).copyTo(merge);
 				if (i >= shifts.size())
 					continue;
@@ -114,7 +119,7 @@ void ImageStitch::StartStitching(bool crop, bool end2end)
         else {
             images[0].copyTo(merge);
             for (int i = 1; i < images.size(); i += 1) {
-                std::cout << shifts[i-1].first << " " << shifts[i-1].second << std::endl;
+                //std::cout << shifts[i-1].first << " " << shifts[i-1].second << std::endl;
                 MergeImage(&merge, &images[i], shifts[i-1]).copyTo(merge);
 				if (i >= shifts.size())
 					continue;
@@ -276,8 +281,8 @@ void ImageStitch::CalculateFeatures_End2End()
 	for (int i = 0; i < matches[6][7].size() / 1; i += 1) {
 		const auto & ind = matches[6][7][i];
 		cv::line(merge,
-				 cv::Point(features[6][ind.first - 1].first, features[6][ind.first - 1].second),
-				 cv::Point(features[7][ind.second - 1].first + test1.cols, features[7][ind.second - 1].second),
+				 cv::Point(features[6][ind.first].first, features[6][ind.first].second),
+				 cv::Point(features[7][ind.second].first + test1.cols, features[7][ind.second].second),
 				 cv::Scalar(255, 0, 0));
 	}
 
@@ -387,9 +392,9 @@ cv::Mat ImageStitch::MergeImage(cv::Mat * img1, cv::Mat * img2, std::pair<int, i
 	}
 
 
-	cv::imshow("merge", merge);
-	cv::waitKey();
-	cv::destroyWindow("merge");
+	//cv::imshow("merge", merge);
+	//cv::waitKey();
+	//cv::destroyWindow("merge");
 
 	return merge;
 }

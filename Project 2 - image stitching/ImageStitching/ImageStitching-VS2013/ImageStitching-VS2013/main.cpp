@@ -23,9 +23,8 @@ int main(/*int argc, char **argv*/)
 {
 	int argc = 3;
 	string argv[3];
-	argv[1] = "../../InSideSocialScience/";
-	argv[1] = "../../test2/";
-	argv[2] = "../result/";
+	argv[1] = "../../grass_ground/";
+	argv[2] = argv[1];
 	// check the number of the arguments
 	if (argc != 3) // the app name, the input folder name, the output folder name
 	{
@@ -60,7 +59,6 @@ int main(/*int argc, char **argv*/)
 	
 	/*use MySIFT to do SIFT feature detection, description, matching*/
 	MySIFT sift(&images,height,width);
-	cout << "test\n";
 	//save the images with kpts
 	for (int i = 0; i < images.size(); i++)
 	{
@@ -69,9 +67,10 @@ int main(/*int argc, char **argv*/)
 		images[i].cv_kpts = keypoints;
 		Mat outputImg;
 		drawKeypoints(images[i].image, keypoints, outputImg, Scalar(255.0, 0.0, 0.0), DrawMatchesFlags::DRAW_RICH_KEYPOINTS);
-		char outName[100];
-		sprintf(outName, "%sSIFT_kpts%d.jpg", argv[2] , i);
-		//imwrite(outName, outputImg);
+		//char outName[100];
+		//sprintf(outName, "%sSIFT_kpts%d.jpg", argv[2] , i);
+		string outName = argv[2] + "SIFT_kpts" +to_string(i) + ".jpg";
+		imwrite(outName, outputImg);
 	}
 	//save the images with matches
 	for (int i = 0; i < images.size(); i++)
@@ -83,11 +82,13 @@ int main(/*int argc, char **argv*/)
 		vector<DMatch> self_matches = sift.convertToCV_Matches(theImage);
 		Mat  img_matches_self;
 		drawMatches(images[theImage].image, images[theImage].cv_kpts, images[nextImage].image, images[nextImage].cv_kpts, self_matches, img_matches_self);
-		char outName[100];
-		sprintf(outName, "%sSIFT_matches%d.jpg", argv[2], theImage);
+		//char outName[100];
+		//sprintf(outName, "%sSIFT_matches%d.jpg", argv[2], theImage);
+		string outName = argv[2] + "SIFT_matches" + to_string(i) + ".jpg";
 		imwrite(outName, img_matches_self);
 	}
 	/*Execute image stitching*/
+	srand((unsigned int)time(NULL));
 	ImageStitch stitch(argv[2],images);
 	stitch.StartStitching(true, false);
 	

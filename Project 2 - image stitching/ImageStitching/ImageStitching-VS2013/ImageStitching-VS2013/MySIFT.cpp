@@ -20,10 +20,10 @@ using namespace cvflann;
 #define SIFT_DESCR_HIST_ARRAY_WIDTH 4														//the width of descriptor histogram array (histogram array: 4x4)
 #define SIFT_DESCR_HIST_BINS 8																			//the number of bins per histogram in descriptor array
 #define SIFT_DESCR_MAG_THR 0.2f																		// threshold on magnitude of elements of descriptor vector
-#define SIFT_MATCH_DISTANCE_RATIO 0.6														//threshold on squared ratio of distances between NN and 2nd NN	 (Lowe uses 0.8, RobHess uses 0.49)	
+#define SIFT_MATCH_DISTANCE_RATIO 0.49														//threshold on squared ratio of distances between NN and 2nd NN	 (Lowe uses 0.8, RobHess uses 0.49)	
 
 MySIFT::MySIFT(vector<Image>* imgs, int height, int width) :
-	s(3), baseSigma(1.6f), contrastThreshold(0.03f), curvaturesThreshold(10.0f)
+	s(3), baseSigma(1.6f), contrastThreshold(0.02f), curvaturesThreshold(10.0f)
 {
 	images = imgs;
 
@@ -31,10 +31,13 @@ MySIFT::MySIFT(vector<Image>* imgs, int height, int width) :
 	/*min(h/(2^(n-1)),w/(2^(n-1)))>=3 
 	The width and height of gaussian images in the highest octave should at least have 3 pixels for  findExtrema.*/
 	octave_num = cvRound(log(min(height,width)-log(3.0))/log(2.0)+1); 
-
+	cout << "Execute pre_processing.\n";
 	pre_process();
+	cout << "Execute feature detection:\n";
 	detection();
+	cout << "Execute feature description.\n";
 	description();
+	cout << "Execute feature matching.\n";
 	matching();
 }
 void MySIFT::pre_process()
@@ -55,6 +58,7 @@ void MySIFT::detection()
 {
 	/*Scale-space extrema detection*/
 	/*Construct scale spaces for each image*/
+	cout << "\tBuild Gaussina Pyramid.\n";
 	for (int i = 0; i < (*images).size(); i++) 
 	{
 		/*build Gaussian Pyramid*/
@@ -68,6 +72,7 @@ void MySIFT::detection()
 			}
 		}*/
 	}
+	cout << "\tBuild DoG Pyramid.\n";
 	for (int i = 0; i < (*images).size(); i++) 
 	{
 		/*build DoG Pyramid*/
@@ -102,7 +107,7 @@ void MySIFT::detection()
 			}
 		}*/
 	}
-
+	cout << "\tFind extrema and assign orientations.\n";
 	/*Keypoint Location*/
 	for (int i = 0; i < (*images).size(); i++)
 	{
@@ -179,7 +184,7 @@ void MySIFT::buildDoGPyramid(int ith)
 			Mat src1 = (*images)[ith].octaves[i].gaussianImgs[j + 1];
 			Mat src2 = (*images)[ith].octaves[i].gaussianImgs[j];
 			Mat dog = Mat(src1.rows, src1.cols, CV_32FC1);
-			subtract(src1, src2, dog);
+			subtract(src2, src1, dog);
 			(*images)[ith].octaves[i].DogImgs.push_back(dog);
 		}
 	}
@@ -341,7 +346,7 @@ void MySIFT::findExtrema(int ith)
 				for (int c = IMG_BORDER; c < cols - IMG_BORDER; c++)
 				{
 					float val = *(currentPtr + c);
-					if (val <= 0.5 * contrastThreshold / s)
+					if (val <= 0.5 * contrastThreshold/s)
 						continue;
 					if (!isLocalExtrema(val, c, currentPtr, prePtr, nextPtr, (int)currentDoG.step1()))
 						continue;
@@ -440,8 +445,6 @@ void MySIFT::assignOrientation(int ith)
 				double ori = accurate_bin * (360.0f / (float)SIFT_ORI_HIST_BINS);
 				if (abs(ori - 360.0f) < FLT_EPSILON)		//if the value is less than floating-point precision of type float
 					ori = 0.0f;
-				if (ori < 0 || ori >= 360.0f)
-					cout << "ori=" << ori << " ";
 				(*images)[ith].features[n].orientations.push_back(ori);
 			}
 		}
@@ -515,8 +518,6 @@ float***  MySIFT::createDescriptor(Mat gaussianImg, Feature f, Point2f pos, floa
 	float angle_to_rotate = 360.0f - ori;
 	if (abs(angle_to_rotate-360) < FLT_EPSILON)
 		angle_to_rotate = 0.0f;
-	if (angle_to_rotate < 0 || angle_to_rotate >= 360)
-		cout <<"angle to rotate="<< angle_to_rotate << "  ";
 	float rotation_sin = sin(angle_to_rotate*(PI / 180.0f));
 	float rotation_cos = cos(angle_to_rotate*(PI / 180.0f));
 
@@ -587,10 +588,7 @@ float***  MySIFT::createDescriptor(Mat gaussianImg, Feature f, Point2f pos, floa
 									float v_o = v_c*( (o==0) ? (1.0-d_o) : d_o );
 									int index_o = (o0 + o) % SIFT_DESCR_HIST_BINS;
 									histogram[index_r][index_c][index_o] += v_o;
-									if (index_o < 0)
-									{
-										//cout << "o<0 ";
-									}
+									
 								} //end iteration of o
 							}
 						} // end iteration of c
@@ -631,12 +629,6 @@ void MySIFT::hist_to_descriptor(float*** hist, FeaturePoint* keypoint, int jthOr
 	//re-nomalize
 	normalize_descr(keypoint);
 
-	//convert floating-point descriptor to integer valued descriptor 
-	/*for (int i = 0; i < (*keypoint).descriptor.size(); i++)
-	{
-		int val = SIFT_DESCR_SCL_FCTR * (*keypoint).descriptor[i];
-		(*keypoint).descriptor[i] = MIN(255, val);
-	}*/
 }
 vector<KeyPoint> MySIFT::convertToCV_Kpts(int ith)
 {
@@ -683,17 +675,16 @@ void MySIFT::matching()
 		Matrix<float> queryDescriptors = convertDescriptorsToMatrix((*images)[theImage].keypoints);
 		Matrix<int> indices(new int[queryDescriptors.rows*nn], queryDescriptors.rows, nn);
 		Matrix<float> distance(new float[queryDescriptors.rows*nn], queryDescriptors.rows, nn);
-
+		
 		// construct an randomized kd-tree index using 4 kd-trees
-		Index<cvflann::L2<float> > index(trainDescriptors, KDTreeIndexParams(4));
-		index.buildIndex();
+		Index<cvflann::L2_Simple<float> > kdtree(trainDescriptors, KDTreeIndexParams(1));
+		kdtree.buildIndex();
 		//  find the nearest neighbor in queryD for each point in trainD using 128 checks
-		index.knnSearch(queryDescriptors, indices, distance, nn, SearchParams());
-
+		kdtree.knnSearch(queryDescriptors, indices, distance, nn, SearchParams());
 		for (int j = 0; j < (*images)[theImage].keypoints.size(); j++)
 		{
-			if (distance[j][0] < distance[j][1] * SIFT_MATCH_DISTANCE_RATIO){
-				(*images)[theImage].matches.push_back(Match(j, indices[j][0], distance[j][0]));
+			if (sqrt(distance[j][0]) < sqrt(distance[j][1]) * SIFT_MATCH_DISTANCE_RATIO){
+				(*images)[theImage].matches.push_back(Match(j, indices[j][0], sqrt(distance[j][0])));
 			}
 		}
 		delete[] queryDescriptors.data;

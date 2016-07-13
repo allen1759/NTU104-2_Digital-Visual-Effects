@@ -17,12 +17,12 @@ int main(int argc, const char * argv[])
 {
 	// insert code here...
 	srand((unsigned int)time(NULL));
-	std::string path = "/Users/Allen/Documents/workspace/NTU104-2_Digital-Visual-Effects/Project 2 - image stitching/ImageStitching/denny/";
+	std::string path = "/Users/Allen/Documents/workspace/NTU104-2_Digital-Visual-Effects/Project 2 - image stitching/ImageStitching/InSideSocialScience/";
 	//std::string path = "../../";
     
 
 	ImageStitch stitch(path);
-	stitch.StartStitching(false, true);
+	stitch.StartStitching(false, false);
 
 
 	return 0;
